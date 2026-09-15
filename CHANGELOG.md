@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Compatibility:** Replace stale injected helpers under the launch lock after an upgrade, report helper versions and mismatches in `status`, and generate matching helper/CLI versions for standalone builds. `imsg launch --force` relaunches unconditionally (#301, thanks @dkattan).
+
 ## 0.15.5 - 2026-09-14
 
 **Highlights:** Release executables no longer crash on phone metadata lookups through symlinks, distant date filters no longer crash, and group-photo staging is secure (thanks @SebTardif).
