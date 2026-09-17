@@ -67,6 +67,16 @@ static unsigned long long flagsForAssociatedMessagePayload(NSAttributedString *s
     return flagsForMessagePayload(subject, fileTransferGuids, isAudioMessage);
 }
 
+static void applyNormalMessageThread(id message, NSString *threadIdentifier) {
+    if (threadIdentifier.length) {
+        if ([message respondsToSelector:@selector(setThreadIdentifier:)]) {
+            [message performSelector:@selector(setThreadIdentifier:) withObject:threadIdentifier];
+        }
+    } else {
+        clearReplyMetadataOnMessage(message);
+    }
+}
+
 /// Build an IMMessage suitable for `[chat sendMessage:]`. Handles plain text,
 /// optional subject, optional effect (`com.apple.MobileSMS.expressivesend.*`),
 /// optional reply target (`selectedMessageGuid`), and ddScan flag.
@@ -88,6 +98,16 @@ static id buildIMMessage(NSAttributedString *body,
                          BOOL isAudioMessage,
                          BOOL ddScan,
                          NSString *clientMessageGuid) {
+    // Native inline replies are ordinary messages with a thread identifier.
+    // Keeping the legacy type-100 association sends them through the reaction
+    // constructor: delivery can succeed while Messages omits the local bubble.
+    // Preserve the legacy fallback only when a native thread could not resolve.
+    if (associatedMessageType == 100 && threadIdentifier.length) {
+        associatedMessageGuid = nil;
+        associatedMessageType = 0;
+        associatedMessageRange = NSMakeRange(0, 0);
+    }
+
     // Reactions take a different code path entirely (macOS 26 init below) —
     // the IMMessageItem-first construction can't carry associated-message
     // fields atomically, and post-init setters don't survive the wrap.
@@ -244,14 +264,7 @@ static id buildIMMessage(NSAttributedString *body,
         [inv retainArguments];
         id result = invokeReturningObject(inv);
         if (result) {
-            if (threadIdentifier
-                && [result respondsToSelector:@selector(setThreadIdentifier:)]) {
-                [result performSelector:@selector(setThreadIdentifier:)
-                             withObject:threadIdentifier];
-            }
-            if (!threadIdentifier.length) {
-                clearReplyMetadataOnMessage(result);
-            }
+            applyNormalMessageThread(result, threadIdentifier);
             return result;
         }
     }
@@ -283,9 +296,7 @@ static id buildIMMessage(NSAttributedString *body,
         [inv invoke];
         __unsafe_unretained id result = nil;
         [inv getReturnValue:&result];
-        if (!threadIdentifier.length) {
-            clearReplyMetadataOnMessage(result);
-        }
+        applyNormalMessageThread(result, threadIdentifier);
         return result;
     }
 
@@ -306,9 +317,7 @@ static id buildIMMessage(NSAttributedString *body,
         [inv invoke];
         __unsafe_unretained id result = nil;
         [inv getReturnValue:&result];
-        if (!threadIdentifier.length) {
-            clearReplyMetadataOnMessage(result);
-        }
+        applyNormalMessageThread(result, threadIdentifier);
         return result;
     }
     return nil;
