@@ -276,3 +276,17 @@ func rpcMessagesByGUIDReturnsOnlyExactMessage() async throws {
   let missing = try #require(output.responses.last?["result"] as? [String: Any])
   #expect(missing["message"] is NSNull)
 }
+
+@Test
+func rpcDatabaseMaxRowIDReportsUnfilteredHighWater() async throws {
+  let store = try makeMessagesAfterStore(rows: [
+    (2, 1, Date(timeIntervalSince1970: 1_700_000_000)),
+    (9, 2, Date(timeIntervalSince1970: 1_700_172_800)),
+  ])
+  let output = TestRPCOutput()
+  let server = RPCServer(store: store, verbose: false, readOnly: true, output: output)
+  await server.handleLineForTesting(
+    #"{"jsonrpc":"2.0","id":1,"method":"database.max_rowid","params":{}}"#)
+  let result = try #require(output.responses.first?["result"] as? [String: Any])
+  #expect(testInt64(result["max_rowid"]) == 9)
+}
