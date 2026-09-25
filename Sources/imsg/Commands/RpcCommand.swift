@@ -23,11 +23,19 @@ enum RpcCommand {
     abstract: "Run JSON-RPC over stdin/stdout",
     discussion: nil,
     signature: CommandSignatures.withRuntimeFlags(
-      CommandSignature(options: CommandSignatures.baseOptions())
+      CommandSignature(
+        options: CommandSignatures.baseOptions(),
+        flags: [
+          .make(
+            label: "read-only", names: [.long("read-only")],
+            help: "Expose only explicitly allowed database reads; reject all mutations")
+        ]
+      )
     ),
     usageExamples: [
       "imsg rpc",
       "imsg rpc --db ~/Library/Messages/chat.db",
+      "imsg rpc --read-only",
     ]
   ) { values, runtime in
     try await run(values: values, runtime: runtime)
@@ -45,6 +53,7 @@ enum RpcCommand {
     let server = RPCServer(
       databasePath: dbPath,
       verbose: runtime.verbose,
+      readOnly: values.flag("read-only"),
       contactResolver: contacts
     )
     try await server.run()

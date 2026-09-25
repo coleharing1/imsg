@@ -128,12 +128,16 @@ extension MessageStore {
     afterRowID: Int64,
     chatID: Int64?,
     limit: Int,
-    includeReactions: Bool = false
+    includeReactions: Bool = false,
+    startDate: Date? = nil,
+    endDate: Date? = nil
   ) throws -> MessagesAfterPage {
     guard limit > 0 else {
       return MessagesAfterPage(messages: [], nextRowID: afterRowID, hasMore: false)
     }
 
+    let startEpoch = try startDate.map(Self.appleEpoch)
+    let endEpoch = try endDate.map(Self.appleEpoch)
     return try withConnection { db in
       var physicalLimit = limit == Int.max ? limit : limit + 1
 
@@ -143,7 +147,9 @@ extension MessageStore {
           afterRowID: MessageID(rawValue: afterRowID),
           chatID: chatID.map { ChatID(rawValue: $0) },
           limit: physicalLimit,
-          includeReactions: includeReactions
+          includeReactions: includeReactions,
+          startEpoch: startEpoch,
+          endEpoch: endEpoch
         )
         var physicalMessages: [Message] = []
         var parentCache: ReplyParentCache = [:]
@@ -196,6 +202,31 @@ extension MessageStore {
         }
         physicalLimit = nextLimit
       }
+    }
+  }
+
+  /// Look up one exact local message without enumerating a chat or exposing unrelated rows.
+  public func message(guid: String) throws -> Message? {
+    guard schema.hasReactionColumns else { return nil }
+    let trimmed = guid.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    return try withConnection { db in
+      let selection = MessageRowSelection(
+        store: self, chatIDColumn: MessageRowSelection.canonicalChatID)
+      let sql = """
+        SELECT \(selection.selectList)
+        FROM message m
+        LEFT JOIN handle h ON m.handle_id = h.ROWID
+        WHERE m.guid = ? COLLATE NOCASE
+        ORDER BY m.ROWID DESC LIMIT 1
+        """
+      let rows = try db.prepareRowIterator(sql, bindings: [trimmed])
+      guard let row = try rows.failableNext() else { return nil }
+      let decoded = try decodeMessageRow(row, columns: selection.columns, fallbackChatID: nil)
+      var parentCache: ReplyParentCache = [:]
+      var pollOptionCache = PollOptionTextCache()
+      return try message(
+        from: decoded, db, parentCache: &parentCache, pollOptionCache: &pollOptionCache)
     }
   }
 

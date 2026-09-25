@@ -233,3 +233,46 @@ private func testInt64(_ value: Any?) -> Int64? {
   if let value = value as? NSNumber { return value.int64Value }
   return nil
 }
+
+@Test
+func rpcMessagesAfterPagesAllChatsInRecentWindow() async throws {
+  let old = Date(timeIntervalSince1970: 1_700_000_000)
+  let recent = Date(timeIntervalSince1970: 1_700_172_800)
+  let store = try makeMessagesAfterStore(rows: [
+    (1, 1, old), (2, 1, recent), (3, 2, old), (4, 2, recent), (5, 1, recent),
+  ])
+  let output = TestRPCOutput()
+  let server = RPCServer(store: store, verbose: false, output: output)
+  let start = "2023-11-16T00:00:00Z"
+  await server.handleLineForTesting(
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"messages.after\",\"params\":{\"since_rowid\":0,\"start\":\"\(start)\",\"limit\":2}}"
+  )
+  let first = try #require(output.responses.first?["result"] as? [String: Any])
+  #expect((first["messages"] as? [[String: Any]])?.compactMap { testInt64($0["id"]) } == [2, 4])
+  #expect(testInt64(first["next_rowid"]) == 4)
+  #expect(first["has_more"] as? Bool == true)
+  await server.handleLineForTesting(
+    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"messages.after\",\"params\":{\"since_rowid\":4,\"start\":\"\(start)\",\"limit\":2}}"
+  )
+  let second = try #require(output.responses.last?["result"] as? [String: Any])
+  #expect((second["messages"] as? [[String: Any]])?.compactMap { testInt64($0["id"]) } == [5])
+  #expect(second["has_more"] as? Bool == false)
+}
+
+@Test
+func rpcMessagesByGUIDReturnsOnlyExactMessage() async throws {
+  let store = try makeMessagesAfterReactionStore()
+  let output = TestRPCOutput()
+  let server = RPCServer(store: store, verbose: false, output: output)
+  await server.handleLineForTesting(
+    #"{"jsonrpc":"2.0","id":1,"method":"messages.by_guid","params":{"guid":"MESSAGE-GUID"}}"#
+  )
+  let result = try #require(output.responses.first?["result"] as? [String: Any])
+  let message = try #require(result["message"] as? [String: Any])
+  #expect(testInt64(message["id"]) == 7)
+  await server.handleLineForTesting(
+    #"{"jsonrpc":"2.0","id":2,"method":"messages.by_guid","params":{"guid":"absent"}}"#
+  )
+  let missing = try #require(output.responses.last?["result"] as? [String: Any])
+  #expect(missing["message"] is NSNull)
+}

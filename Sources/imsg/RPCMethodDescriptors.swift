@@ -44,7 +44,8 @@ struct RPCBridgeRequirement: Sendable, Equatable {
 
 enum RPCDispatchRoute: Sendable, Equatable {
   case initialize, status, chatsList, messagesStats, messagesHistory, messagesSearch
-  case messagesAfter, watchSubscribe, bridgeEventsSubscribe, watchUnsubscribe
+  case messagesAfter, messagesByGUID, databaseMaxRowID
+  case watchSubscribe, bridgeEventsSubscribe, watchUnsubscribe
   case send, sendTracked, sendRich, sendAttachment
   case sendMultipart, sendSticker, messagesScheduled, pollSend, pollVote, pollUnvote
   case tapback, typing, read, messageEdit, messageUnsend, messageDelete
@@ -108,6 +109,8 @@ let rpcMethodDescriptors: [RPCMethodDescriptor] = [
   RPCMethodDescriptor("initialize", route: .initialize, lane: .control),
   RPCMethodDescriptor("status", route: .status, lane: .read),
   RPCMethodDescriptor("watch.unsubscribe", route: .watchUnsubscribe, lane: .control),
+  RPCMethodDescriptor(
+    "database.max_rowid", route: .databaseMaxRowID, lane: .read, database: [.ready]),
   RPCMethodDescriptor("chats.list", route: .chatsList, lane: .read, database: [.ready]),
   RPCMethodDescriptor(
     "messages.stats", route: .messagesStats, lane: .read, database: [.ready]),
@@ -117,6 +120,8 @@ let rpcMethodDescriptors: [RPCMethodDescriptor] = [
     "messages.search", route: .messagesSearch, lane: .read, database: [.ready]),
   RPCMethodDescriptor(
     "messages.after", route: .messagesAfter, lane: .read, database: [.ready]),
+  RPCMethodDescriptor(
+    "messages.by_guid", route: .messagesByGUID, lane: .read, database: [.ready]),
   RPCMethodDescriptor(
     "messages.scheduled", route: .messagesScheduled, lane: .read,
     database: [.scheduledMessages]),
@@ -213,6 +218,13 @@ let kSupportedRPCMethods: [String] =
   rpcMethodDescriptors
   .filter(\.isCompiledForCurrentPlatform)
   .flatMap(\.names)
+
+// Explicit list: new upstream RPC methods are denied until reviewed here.
+let kReadOnlyRPCMethods: Set<String> = [
+  "initialize", "status", "watch.unsubscribe", "chats.list", "messages.stats",
+  "messages.history", "messages.search", "messages.after", "messages.scheduled",
+  "watch.subscribe", "messages.by_guid", "database.max_rowid",
+]
 
 private let rpcMethodByName: [String: RPCMethodDescriptor] = {
   var result: [String: RPCMethodDescriptor] = [:]

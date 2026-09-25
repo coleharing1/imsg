@@ -45,9 +45,11 @@ func typedStreamRejectsTruncatedAndInvalidLengthFrames() {
 @Test
 func typedStreamReadsBigEndianLengths() {
   let text = String(repeating: "b", count: 300)
-  let bytes =
-    [UInt8(4), 11] + Array("typedstream".utf8)
-    + [0x81, 0x03, 0xe8, 0x01, 0x2b, 0x81, 0x01, 0x2c] + Array(text.utf8) + [0x86]
+  var bytes: [UInt8] = [4, 11]
+  bytes += Array("typedstream".utf8)
+  bytes += [0x81, 0x03, 0xe8, 0x01, 0x2b, 0x81, 0x01, 0x2c]
+  bytes += Array(text.utf8)
+  bytes += [0x86]
   let matches = TypedStreamParser.parseAttributedBody(Data(bytes)) == text
   #expect(matches)
 }

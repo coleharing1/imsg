@@ -1,0 +1,7 @@
+# Read-only RPC mode
+
+Run `imsg rpc --read-only` to expose a deliberately small database-reading RPC surface over stdio. It accepts `initialize`, `status`, `database.max_rowid`, `chats.list`, `messages.stats`, `messages.history`, `messages.search`, `messages.after`, `messages.by_guid`, `messages.scheduled`, `watch.subscribe`, and `watch.unsubscribe`. Other methods, including all send, edit, delete, reaction, read-marking, chat/group mutation, and bridge methods, return JSON-RPC method-not-found before dispatch. Status advertises only the allowed methods. This mode never probes or launches the optional IMCore bridge.
+
+`messages.after` additionally accepts optional ISO 8601 `start` and `end` bounds. Use `since_rowid: 0` with a bounded date window to page recent rows across every chat without relying on the capped `chats.list` result. Save the returned `next_rowid` after each fully processed page and continue until `has_more` is false. A date-filtered cursor describes only that filtered scan; use an unfiltered cursor for ongoing catch-up. `database.max_rowid` gives a baseline for a new recent-window importer. Cursors remain local to one Messages database generation.
+
+`messages.by_guid` returns `{ "message": Message | null }` for an exact message GUID. Request `attachments: true` only for evidence that needs media metadata. It does not read or copy attachment bytes. Both new methods require Full Disk Access to the actual parent process that starts `imsg`. No Automation or SIP change is needed for reads.

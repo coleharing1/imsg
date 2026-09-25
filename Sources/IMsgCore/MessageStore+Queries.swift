@@ -72,7 +72,9 @@ struct MessagesAfterQuery {
     afterRowID: MessageID,
     chatID: ChatID?,
     limit: Int,
-    includeReactions: Bool
+    includeReactions: Bool,
+    startEpoch: Binding? = nil,
+    endEpoch: Binding? = nil
   ) {
     self.selection = MessageRowSelection(
       store: store, chatIDColumn: chatID == nil ? MessageRowSelection.canonicalChatID : nil)
@@ -94,6 +96,14 @@ struct MessagesAfterQuery {
     if let chatID {
       sql += " AND cmj.chat_id = ?"
       bindings.append(chatID.rawValue)
+    }
+    if let startEpoch {
+      sql += " AND m.date >= ?"
+      bindings.append(startEpoch)
+    }
+    if let endEpoch {
+      sql += " AND m.date < ?"
+      bindings.append(endEpoch)
     }
     sql += " ORDER BY m.ROWID ASC LIMIT ?"
     bindings.append(limit)

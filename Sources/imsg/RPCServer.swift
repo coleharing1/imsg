@@ -52,6 +52,7 @@ final class RPCServer: @unchecked Sendable {
   let output: RPCOutput
   let subscriptions: SubscriptionStore
   let verbose: Bool
+  let readOnly: Bool
   let sendMessage: (MessageSendOptions) throws -> MessageSendOptions
   let resolveSentMessage: SentMessageResolver
   let bridgeInvoker: BridgeInvoker
@@ -79,6 +80,7 @@ final class RPCServer: @unchecked Sendable {
   init(
     store: MessageStore,
     verbose: Bool,
+    readOnly: Bool = false,
     output: RPCOutput = RPCWriter(),
     sendMessage: @escaping (MessageSendOptions) throws -> MessageSendOptions = {
       try MessageSender().sendResolvingRoute($0)
@@ -129,6 +131,7 @@ final class RPCServer: @unchecked Sendable {
     self.databaseResources = RPCDatabaseResourceOwner(store: store)
     self.subscriptions = SubscriptionStore(limit: 64)
     self.verbose = verbose
+    self.readOnly = readOnly
     self.output = output
     self.sendMessage = sendMessage
     self.resolveSentMessage = resolveSentMessage
@@ -152,6 +155,7 @@ final class RPCServer: @unchecked Sendable {
   init(
     databasePath: String,
     verbose: Bool,
+    readOnly: Bool = false,
     output: RPCOutput = RPCWriter(),
     storeFactory: @escaping RPCMessageStoreFactory = { try MessageStore(path: $0) },
     sendMessage: @escaping (MessageSendOptions) throws -> MessageSendOptions = {
@@ -199,6 +203,7 @@ final class RPCServer: @unchecked Sendable {
     self.databaseResources = RPCDatabaseResourceOwner(path: databasePath, factory: storeFactory)
     self.subscriptions = SubscriptionStore(limit: 64)
     self.verbose = verbose
+    self.readOnly = readOnly
     self.output = output
     self.sendMessage = sendMessage
     self.resolveSentMessage = resolveSentMessage

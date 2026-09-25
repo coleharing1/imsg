@@ -129,16 +129,19 @@ extension RPCServer {
 
   func statusSnapshot() async throws -> [String: Any] {
     async let database = databaseResources.snapshot()
-    async let bridge = bridgeSnapshot()
-    let (databaseSnapshot, bridgeSnapshot) = try await (database, bridge)
+    let bridgeSnapshot = readOnly ? RPCBridgeSnapshot.unavailable : try await bridgeSnapshot()
+    let databaseSnapshot = await database
     return [
       "version": IMsgVersion.current,
       "protocol_version": kRPCProtocolVersion,
       "database": databaseSnapshot.dictionary,
       "bridge": bridgeSnapshot.dictionary,
       "contacts": ["available": !contactResolver.cached.contactsUnavailable],
-      "methods": rpcUsableMethods(database: databaseSnapshot, bridge: bridgeSnapshot),
-      "supported_methods": kSupportedRPCMethods,
+      "methods": rpcUsableMethods(database: databaseSnapshot, bridge: bridgeSnapshot)
+        .filter { !readOnly || kReadOnlyRPCMethods.contains($0) },
+      "supported_methods":
+        kSupportedRPCMethods
+        .filter { !readOnly || kReadOnlyRPCMethods.contains($0) },
     ]
   }
 

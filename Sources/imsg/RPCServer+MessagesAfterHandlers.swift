@@ -2,6 +2,39 @@ import Foundation
 import IMsgCore
 
 extension RPCServer {
+  func handleDatabaseMaxRowID(id: Any?, params: [String: Any]) async throws {
+    _ = try RPCParameters(params, method: "database.max_rowid", supportedKeys: [])
+    let database = try await databaseResources.require()
+    respond(id: id, result: ["max_rowid": try database.store.maxRowID()])
+  }
+
+  func handleMessagesByGUID(id: Any?, params: [String: Any]) async throws {
+    let params = try RPCParameters(
+      params, method: "messages.by_guid",
+      supportedKeys: ["guid", "attachments", "convert_attachments"])
+    guard let guid = try params.string("guid"),
+      !guid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      throw RPCError.invalidParams("guid is required")
+    }
+    let database = try await databaseResources.require()
+    let store = database.store
+    guard let message = try store.message(guid: guid) else {
+      respond(id: id, result: ["message": NSNull()])
+      return
+    }
+    let reactions = try store.reactions(for: [message])
+    let payload = try buildMessagePayload(
+      store: store, message: message,
+      includeAttachments: try params.boolean("attachments") ?? false,
+      includeReactions: true,
+      prefetchedReactions: reactions[message.rowID] ?? [],
+      attachmentOptions: AttachmentQueryOptions(
+        convertUnsupported: try params.boolean("convert_attachments") ?? false),
+      contactResolver: contactResolver)
+    respond(id: id, result: ["message": payload])
+  }
+
   func handleMessagesAfter(id: Any?, params: [String: Any]) async throws {
     let params = try RPCParameters(
       params,
@@ -13,6 +46,8 @@ extension RPCServer {
         "attachments",
         "convert_attachments",
         "include_reactions",
+        "start",
+        "end",
       ]
     )
 
@@ -41,6 +76,8 @@ extension RPCServer {
     }
 
     let includeAttachments = try params.boolean("attachments") ?? false
+    let filter = try MessageFilter.fromISO(
+      participants: [], startISO: try params.string("start"), endISO: try params.string("end"))
     let attachmentOptions = AttachmentQueryOptions(
       convertUnsupported: try params.boolean("convert_attachments") ?? false)
     let database = try await databaseResources.require()
@@ -49,7 +86,9 @@ extension RPCServer {
       afterRowID: sinceRowID,
       chatID: chatID,
       limit: limit,
-      includeReactions: try params.boolean("include_reactions") ?? false
+      includeReactions: try params.boolean("include_reactions") ?? false,
+      startDate: filter.startDate,
+      endDate: filter.endDate
     )
     let reactionsByMessageID = try store.reactions(for: page.messages)
     var payloads: [[String: Any]] = []

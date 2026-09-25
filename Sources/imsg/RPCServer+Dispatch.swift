@@ -17,6 +17,14 @@ extension RPCServer {
     let params = request.params
     let id = request.id
 
+    // Enforce before routing, including aliases and future upstream additions.
+    if readOnly && !kReadOnlyRPCMethods.contains(method) {
+      if !request.isNotification {
+        output.sendError(id: id, error: RPCError.methodNotFound(method))
+      }
+      return .completed
+    }
+
     do {
       guard let route = rpcDispatchRoutes[method] else {
         if !request.isNotification {
@@ -39,6 +47,10 @@ extension RPCServer {
         try await handleMessagesSearch(id: id, params: params)
       case .messagesAfter:
         try await handleMessagesAfter(id: id, params: params)
+      case .messagesByGUID:
+        try await handleMessagesByGUID(id: id, params: params)
+      case .databaseMaxRowID:
+        try await handleDatabaseMaxRowID(id: id, params: params)
       case .watchSubscribe:
         try await handleWatchSubscribe(id: id, params: params)
       case .bridgeEventsSubscribe:
